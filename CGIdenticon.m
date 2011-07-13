@@ -135,7 +135,7 @@ void render_identicon(CGContextRef ctx, int32_t code, unsigned int size) {
 }
 
 @implementation TUIImage (CGIdenticon)
-+ (TUIImage *)imageWithUserName:(NSString *)userName {
++ (TUIImage *)identiconImageWithUserName:(NSString *)userName {
     const char *cStr = [userName UTF8String];
     unsigned char result[CC_SHA1_DIGEST_LENGTH];
     CC_SHA1( cStr, (CC_LONG)strlen(cStr), result );
