@@ -1,4 +1,5 @@
-#import "TUIKit.h"
+#import "CGIdenticon.h"
+#import <CoreGraphics/CoreGraphics.h>
 #import <CommonCrypto/CommonDigest.h>
 
 int patch0[]={ 0, 4, 24, 20 };
@@ -64,8 +65,7 @@ void render_identicon_patch(CGContextRef ctx, CGFloat x, CGFloat y, CGFloat size
 	// restore rotation
 	CGContextRestoreGState(ctx);
 }
-void gloss_effect(CGContextRef ctx, unsigned int size){
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+void gloss_effect(CGContextRef ctx, unsigned int size, CGColorSpaceRef colorSpace){
     
     //CGContextSaveGState(ctx);
     CGContextSaveGState(ctx);
@@ -98,7 +98,7 @@ void gloss_effect(CGContextRef ctx, unsigned int size){
     CGContextClip(ctx);
     CGContextEndTransparencyLayer(ctx);
 }
-void render_identicon(CGContextRef ctx, int32_t code, unsigned int size) {
+void render_identicon(CGContextRef ctx, int32_t code, unsigned int size, CGColorSpaceRef colorSpace) {
 	if (!ctx || !code || !size) return;
     NSLog(@"code: %x",code);
 	CGFloat patchSize = (CGFloat)size / 3;
@@ -113,8 +113,10 @@ void render_identicon(CGContextRef ctx, int32_t code, unsigned int size) {
 	int blue = (code >> 16) & 31;
 	int green = (code >> 21) & 31;
 	int red = (code >> 27) & 31;
-    CGColorRef foreColor = CGColorCreateGenericRGB((red<<3)/(CGFloat)255, (green<<3)/(CGFloat)255, (blue<<3)/(CGFloat)255, 1);
-    CGColorRef backColor = CGColorCreateGenericRGB(1, 1, 1, 1);
+    CGFloat foreColorComp[] = {.9*(red<<3)/(CGFloat)255, .9*(green<<3)/(CGFloat)255, .85*(blue<<3)/(CGFloat)255, 1};
+    CGFloat backColorComp[] = {.95, .95, .92, 1.};
+    CGColorRef foreColor = CGColorCreate(colorSpace, foreColorComp);
+    CGColorRef backColor = CGColorCreate(colorSpace, backColorComp);
    
 	// middle patch
 	render_identicon_patch(ctx, patchSize, patchSize, patchSize, middleType, 0, middleInvert, foreColor, backColor);
@@ -133,7 +135,8 @@ void render_identicon(CGContextRef ctx, int32_t code, unsigned int size) {
     CGColorRelease(backColor);
     
 }
-
+#define IDENTICON_SIZE (96)
+#if TARGET_OS_MAC
 @implementation TUIImage (CGIdenticon)
 + (TUIImage *)identiconImageWithUserName:(NSString *)userName {
     const char *cStr = [userName UTF8String];
@@ -141,11 +144,11 @@ void render_identicon(CGContextRef ctx, int32_t code, unsigned int size) {
     CC_SHA1( cStr, (CC_LONG)strlen(cStr), result );
     uint32_t code = ((result[0] & 0xFF) << 24) | ((result[1] & 0xFF) << 16)
     | ((result[2] & 0xFF) << 8) | (result[3] & 0xFF);
-    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
-    CGContextRef ctx = CGBitmapContextCreate(NULL, 96, 96, 8, 4*96, colorSpace, kCGImageAlphaPremultipliedLast);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef ctx = CGBitmapContextCreate(NULL, IDENTICON_SIZE, IDENTICON_SIZE, 8, 4*96, colorSpace, kCGImageAlphaPremultipliedLast);
     CGContextSetFillColorSpace(ctx, colorSpace);
-    render_identicon(ctx, code, 96);
-    gloss_effect(ctx, 96);
+    render_identicon(ctx, code, IDENTICON_SIZE, colorSpace);
+    gloss_effect(ctx, IDENTICON_SIZE);
     CGImageRef imageRef = CGBitmapContextCreateImage(ctx);
     TUIImage *ret = [TUIImage imageWithCGImage:imageRef];
     CGContextRelease(ctx);
@@ -153,3 +156,44 @@ void render_identicon(CGContextRef ctx, int32_t code, unsigned int size) {
     return ret;
 }
 @end
+#elif (TARGET_OS_IPHONE || TARGET_IPHONE_SIMULATOR)
+void CGContextAddRoundRect(CGContextRef context, CGRect rect, CGFloat radius)
+{
+	radius = MIN(radius, rect.size.width / 2);
+	radius = MIN(radius, rect.size.height / 2);
+	radius = floor(radius);
+	
+	CGContextMoveToPoint(context, rect.origin.x, rect.origin.y + radius);
+	CGContextAddLineToPoint(context, rect.origin.x, rect.origin.y + rect.size.height - radius);
+	CGContextAddArc(context, rect.origin.x + radius, rect.origin.y + rect.size.height - radius, radius, M_PI, M_PI / 2, 1);
+	CGContextAddLineToPoint(context, rect.origin.x + rect.size.width - radius, rect.origin.y + rect.size.height);
+	CGContextAddArc(context, rect.origin.x + rect.size.width - radius, rect.origin.y + rect.size.height - radius, radius, M_PI / 2, 0.0f, 1);
+	CGContextAddLineToPoint(context, rect.origin.x + rect.size.width, rect.origin.y + radius);
+	CGContextAddArc(context, rect.origin.x + rect.size.width - radius, rect.origin.y + radius, radius, 0.0f, -M_PI / 2, 1);
+	CGContextAddLineToPoint(context, rect.origin.x + radius, rect.origin.y);
+	CGContextAddArc(context, rect.origin.x + radius, rect.origin.y + radius, radius, -M_PI / 2, M_PI, 1);
+}
+
+
+@implementation UIImage (CGIdenticon)
++ (UIImage *)identiconImageWithUserName:(NSString *)userName {
+    const char *cStr = [userName UTF8String];
+    unsigned char result[CC_SHA1_DIGEST_LENGTH];
+    CC_SHA1( cStr, (CC_LONG)strlen(cStr), result );
+    uint32_t code = ((result[0] & 0xFF) << 24) | ((result[1] & 0xFF) << 16)
+    | ((result[2] & 0xFF) << 8) | (result[3] & 0xFF);
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
+    CGContextRef ctx = CGBitmapContextCreate(NULL, IDENTICON_SIZE, IDENTICON_SIZE, 8, 4*IDENTICON_SIZE, colorSpace, kCGImageAlphaPremultipliedLast);
+    CGContextSetFillColorSpace(ctx, colorSpace);
+    render_identicon(ctx, code, IDENTICON_SIZE, colorSpace);
+    gloss_effect(ctx, IDENTICON_SIZE, colorSpace);
+    CGImageRef imageRef = CGBitmapContextCreateImage(ctx);
+    UIImage *ret = [UIImage imageWithCGImage:imageRef];
+    CGContextRelease(ctx);
+    CGColorSpaceRelease(colorSpace);
+    return ret;
+}
+
+@end
+
+#endif
