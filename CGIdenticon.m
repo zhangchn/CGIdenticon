@@ -85,21 +85,18 @@ void gloss_effect(CGContextRef ctx, unsigned int size, CGColorSpaceRef colorSpac
     CGContextAddRoundRect(ctx, CGRectMake(4, 4, size-8, size-8), 6);
     CGContextStrokePath(ctx);
     CGContextRestoreGState(ctx);
-    
-    CGContextBeginTransparencyLayer(ctx, NULL);
-
     const CGFloat components1[]={1,1,1,0.3,1,1,1,0.6};
     const CGFloat locations[]={0,1};
     CGGradientRef gradient = CGGradientCreateWithColorComponents(colorSpace, components1, locations, 2);
-    CGContextDrawRadialGradient(ctx, gradient, CGPointMake(size/2, size*2), size/2, CGPointMake(size/2, size*1.7), size*1.3, 0);
-    CGColorSpaceRelease(colorSpace);
-    CGGradientRelease(gradient);
     CGContextBeginPath(ctx);
     CGContextAddRoundRect(ctx, CGRectMake(0, 0, size, size), 6);
     CGContextClosePath(ctx);
     CGContextClip(ctx);
-    CGContextEndTransparencyLayer(ctx);
+    CGContextDrawRadialGradient(ctx, gradient, CGPointMake(size/2, size*2), size/2, CGPointMake(size/2, size*1.7), size*1.3, 0);
+    CGColorSpaceRelease(colorSpace);
+    CGGradientRelease(gradient);
 }
+
 void render_identicon(CGContextRef ctx, int32_t code, unsigned int size, CGColorSpaceRef colorSpace) {
 	if (!ctx || !code || !size) return;
     NSLog(@"code: %x",code);
@@ -149,6 +146,7 @@ void render_identicon(CGContextRef ctx, int32_t code, unsigned int size, CGColor
     CGColorSpaceRef colorSpace = CGColorSpaceCreateDeviceRGB();
     CGContextRef ctx = CGBitmapContextCreate(NULL, IDENTICON_SIZE, IDENTICON_SIZE, 8, 4*96, colorSpace, kCGImageAlphaPremultipliedLast);
     CGContextSetFillColorSpace(ctx, colorSpace);
+    CGContextClipToRoundRect(ctx, CGRectMake(0, 0, 96, 96), 12);
     render_identicon(ctx, code, IDENTICON_SIZE, colorSpace);
     gloss_effect(ctx, IDENTICON_SIZE,colorSpace);
     CGImageRef imageRef = CGBitmapContextCreateImage(ctx);
